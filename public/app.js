@@ -7,12 +7,18 @@ const phoneEl = document.getElementById('phone');
 const shipmentsEl = document.getElementById('shipments');
 const sessionStateEl = document.getElementById('sessionState');
 const sessionTimerEl = document.getElementById('sessionTimer');
+const usernameModalEl = document.getElementById('usernameModal');
+const usernameInputEl = document.getElementById('usernameInput');
+const startGameBtnEl = document.getElementById('startGameBtn');
 
+let username = localStorage.getItem('username') || '';
 let session = null;
 let currentQr = null;
 let shipments = [];
 let testFlags = { rgb: false, openSeq: false };
 let screenMode = { mode: 'qr', color: null };
+let focusMonitorMode = false;
+const remotePlayers = new Map();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#101318');
@@ -75,42 +81,101 @@ lockerBody.receiveShadow = true;
 lockerBody.position.y = 0.925;
 postomatRoot.add(lockerBody);
 
+// Top left logo area (fixed proportions)
 const logoMap = new THREE.TextureLoader().load('https://uma.reflexai.pro/logotip.png');
+logoMap.colorSpace = THREE.SRGBColorSpace;
 const badge = new THREE.Mesh(
-  new THREE.PlaneGeometry(0.52, 0.13),
+  new THREE.PlaneGeometry(0.3, 0.08),
   new THREE.MeshBasicMaterial({ map: logoMap, transparent: true })
 );
-badge.position.set(0, 1.72, 0.278);
+badge.position.set(-0.48, 1.76, 0.279);
 postomatRoot.add(badge);
+
+const brandName = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.44, 0.06),
+  new THREE.MeshBasicMaterial({ color: '#d7dde9', transparent: true, opacity: 0.9 })
+);
+brandName.position.set(0.12, 1.76, 0.279);
+postomatRoot.add(brandName);
 
 const sensor = new THREE.Mesh(
   new THREE.BoxGeometry(0.08, 0.08, 0.08),
   new THREE.MeshStandardMaterial({ color: '#202831', emissive: '#3388ff', emissiveIntensity: 0.3 })
 );
-sensor.position.set(-0.66, 1.89, 0.24);
+sensor.position.set(0.66, 1.84, 0.24);
 postomatRoot.add(sensor);
 
-const screenGroup = new THREE.Group();
-screenGroup.position.set(-0.45, 1.25, 0.279);
-postomatRoot.add(screenGroup);
-const screenFrame = new THREE.Mesh(
-  new THREE.BoxGeometry(0.2, 0.36, 0.03),
-  new THREE.MeshStandardMaterial({ color: '#111418', metalness: 0.6, roughness: 0.35 })
+// Dedicated monitor terminal stand near locker (like payment kiosk)
+const kioskRoot = new THREE.Group();
+kioskRoot.position.set(1.3, 0, -4.52);
+scene.add(kioskRoot);
+
+const kioskBody = new THREE.Mesh(
+  new THREE.BoxGeometry(0.58, 1.8, 0.62),
+  new THREE.MeshStandardMaterial({ color: '#0f1115', roughness: 0.4, metalness: 0.55 })
 );
-screenGroup.add(screenFrame);
+kioskBody.position.y = 0.9;
+kioskBody.castShadow = true;
+kioskRoot.add(kioskBody);
+
+const kioskTop = new THREE.Mesh(
+  new THREE.BoxGeometry(0.56, 0.34, 0.54),
+  new THREE.MeshStandardMaterial({ color: '#151a22', roughness: 0.35, metalness: 0.45 })
+);
+kioskTop.position.set(0, 1.57, -0.04);
+kioskRoot.add(kioskTop);
+
+const kioskScreenFrame = new THREE.Mesh(
+  new THREE.BoxGeometry(0.44, 0.28, 0.05),
+  new THREE.MeshStandardMaterial({ color: '#05080d', roughness: 0.3, metalness: 0.75 })
+);
+kioskScreenFrame.position.set(0, 1.53, 0.24);
+kioskRoot.add(kioskScreenFrame);
+
+const screenGroup = new THREE.Group();
+screenGroup.position.set(0, 1.53, 0.266);
+kioskRoot.add(screenGroup);
 
 const screenCanvas = document.createElement('canvas');
-screenCanvas.width = 512;
-screenCanvas.height = 900;
+screenCanvas.width = 680;
+screenCanvas.height = 420;
 const sctx = screenCanvas.getContext('2d');
 const screenTexture = new THREE.CanvasTexture(screenCanvas);
 const screenMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(0.16, 0.30),
-  new THREE.MeshStandardMaterial({ map: screenTexture, emissive: '#5ba8ff', emissiveIntensity: 0.25 })
+  new THREE.PlaneGeometry(0.4, 0.24),
+  new THREE.MeshStandardMaterial({ map: screenTexture, emissive: '#6ab3ff', emissiveIntensity: 0.35 })
 );
-screenMesh.position.z = 0.016;
 screenMesh.userData.interactive = { type: 'screen' };
 screenGroup.add(screenMesh);
+
+const paymentSlot = new THREE.Mesh(
+  new THREE.BoxGeometry(0.24, 0.03, 0.03),
+  new THREE.MeshStandardMaterial({ color: '#1c2430', metalness: 0.8, roughness: 0.2 })
+);
+paymentSlot.position.set(0, 1.23, 0.31);
+kioskRoot.add(paymentSlot);
+
+const cashSlot = new THREE.Mesh(
+  new THREE.BoxGeometry(0.18, 0.045, 0.06),
+  new THREE.MeshStandardMaterial({ color: '#222d3c', metalness: 0.7, roughness: 0.28 })
+);
+cashSlot.position.set(-0.14, 1.1, 0.3);
+kioskRoot.add(cashSlot);
+
+const cardReader = new THREE.Mesh(
+  new THREE.BoxGeometry(0.13, 0.08, 0.11),
+  new THREE.MeshStandardMaterial({ color: '#2a3648', roughness: 0.3, metalness: 0.7 })
+);
+cardReader.position.set(0.17, 1.08, 0.29);
+kioskRoot.add(cardReader);
+
+const camLens = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.03, 0.03, 0.03, 24),
+  new THREE.MeshStandardMaterial({ color: '#020304', emissive: '#4aa4ff', emissiveIntensity: 0.22 })
+);
+camLens.rotation.x = Math.PI / 2;
+camLens.position.set(0, 1.69, 0.24);
+kioskRoot.add(camLens);
 
 const lockMat = new THREE.MeshStandardMaterial({ color: '#151a20', metalness: 0.7, roughness: 0.45 });
 const doorMat = new THREE.MeshStandardMaterial({ color: '#131821', metalness: 0.8, roughness: 0.35 });
@@ -124,9 +189,9 @@ async function fetchCells() {
 
 function buildDoors(cells) {
   const originX = -0.8;
-  const originY = 1.74;
+  const originY = 1.62;
   const unitW = 1.6 / 10;
-  const unitH = 1.58 / 8;
+  const unitH = 1.46 / 8;
 
   cells.forEach((c) => {
     const pivot = new THREE.Group();
@@ -165,14 +230,34 @@ function spawnPackage(cellId, shipmentId) {
   if (packages.has(cellId)) return;
   const door = doors.get(cellId);
   if (!door) return;
+  const pkg = new THREE.Group();
+
   const box = new THREE.Mesh(
-    new THREE.BoxGeometry(0.09, 0.09, 0.12),
-    new THREE.MeshStandardMaterial({ color: '#b98a52', roughness: 0.8 })
+    new THREE.BoxGeometry(0.1, 0.1, 0.13),
+    new THREE.MeshStandardMaterial({ color: '#f7f9ff', roughness: 0.75, metalness: 0.05 })
   );
-  box.position.set(door.pivot.position.x + 0.04, door.pivot.position.y - 0.01, postomatRoot.position.z + 0.14);
-  box.userData.interactive = { type: 'package', shipmentId, cellId };
-  scene.add(box);
-  packages.set(cellId, box);
+  box.castShadow = true;
+  box.receiveShadow = true;
+  pkg.add(box);
+
+  const tape = new THREE.Mesh(
+    new THREE.BoxGeometry(0.102, 0.014, 0.132),
+    new THREE.MeshStandardMaterial({ color: '#dce6ff' })
+  );
+  tape.position.y = 0.028;
+  pkg.add(tape);
+
+  const sticker = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.05, 0.03),
+    new THREE.MeshBasicMaterial({ color: '#1f2f57' })
+  );
+  sticker.position.set(0, 0.005, 0.066);
+  pkg.add(sticker);
+
+  pkg.position.set(door.pivot.position.x + 0.05, door.pivot.position.y - 0.01, postomatRoot.position.z + 0.14);
+  pkg.userData.interactive = { type: 'package', shipmentId, cellId };
+  scene.add(pkg);
+  packages.set(cellId, pkg);
 }
 
 function removePackage(cellId) {
@@ -192,24 +277,27 @@ function drawScreen() {
     sctx.fillStyle = '#fff';
     sctx.fillRect(0, 0, screenCanvas.width, screenCanvas.height);
     sctx.fillStyle = '#111';
-    sctx.font = 'bold 34px Arial';
+    sctx.font = 'bold 32px Arial';
     sctx.textAlign = 'center';
-    sctx.fillText('Сканируйте QR, чтобы получить заказ', screenCanvas.width / 2, 70);
+    sctx.fillText('Сканируйте QR, чтобы получить заказ', screenCanvas.width / 2, 48);
     if (currentQr?.image) {
       const img = new Image();
       img.onload = () => {
-        sctx.drawImage(img, 66, 180, 380, 380);
+        sctx.drawImage(img, 240, 74, 200, 200);
+        sctx.fillStyle = '#111';
+        sctx.font = '20px Arial';
+        sctx.fillText('Терминал: оплата / снятие / выдача', screenCanvas.width / 2, 320);
         sctx.fillStyle = '#f04';
         sctx.beginPath();
-        sctx.arc(256, 370, 18, 0, Math.PI * 2);
+        sctx.arc(screenCanvas.width / 2, 174, 10, 0, Math.PI * 2);
         sctx.fill();
         screenTexture.needsUpdate = true;
       };
       img.src = currentQr.image;
     }
     sctx.fillStyle = '#444';
-    sctx.font = '24px Arial';
-    sctx.fillText(`Обновление: ${(currentQr?.ttlMs / 1000 || 0).toFixed(0)} c`, 256, 620);
+    sctx.font = '20px Arial';
+    sctx.fillText(`Обновление: ${(currentQr?.ttlMs / 1000 || 0).toFixed(0)} c`, screenCanvas.width / 2, 382);
   }
   screenTexture.needsUpdate = true;
 }
@@ -244,6 +332,7 @@ ws.onmessage = (msg) => {
     screenMode = payload;
     drawScreen();
   }
+  if (event === 'playersUpdated') updateRemotePlayers(payload.players || []);
 };
 
 const keys = {};
@@ -254,6 +343,7 @@ addEventListener('keydown', (e) => {
     togglePhone();
   }
   if (e.code === 'KeyE') handleInteract();
+  if (e.code === 'KeyF') toggleMonitorFocus();
 });
 addEventListener('keyup', (e) => (keys[e.code] = false));
 
@@ -261,7 +351,7 @@ let yaw = 0;
 let pitch = 0;
 let lockEnabled = false;
 renderer.domElement.addEventListener('click', () => {
-  if (!terminalEl.classList.contains('hidden') || !phoneEl.classList.contains('hidden')) return;
+  if (!hasIdentity() || !terminalEl.classList.contains('hidden') || !phoneEl.classList.contains('hidden')) return;
   renderer.domElement.requestPointerLock();
 });
 
@@ -270,7 +360,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 document.addEventListener('mousemove', (e) => {
-  if (!lockEnabled) return;
+  if (!lockEnabled || focusMonitorMode) return;
   yaw -= e.movementX * 0.002;
   pitch -= e.movementY * 0.002;
   pitch = Math.max(-1.4, Math.min(1.4, pitch));
@@ -288,16 +378,17 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     closePanel(terminalEl);
     closePanel(phoneEl);
+    if (focusMonitorMode) toggleMonitorFocus(false);
   }
 });
 
 document.getElementById('closeTerminal').onclick = () => closePanel(terminalEl);
 document.getElementById('scanBtn').onclick = async () => {
-  if (!currentQr) return;
+  if (!currentQr || !hasIdentity()) return;
   const res = await fetch('/api/qr/scan', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ token: currentQr.token, userId: 'player1', deviceId: 'web-client' })
+    body: JSON.stringify({ token: currentQr.token, userId: username, deviceId: 'web-client' })
   });
   if (!res.ok) return;
   session = await res.json();
@@ -309,6 +400,7 @@ document.getElementById('scanBtn').onclick = async () => {
 document.getElementById('closePhone').onclick = () => closePanel(phoneEl);
 
 function togglePhone() {
+  if (!hasIdentity()) return;
   if (phoneEl.classList.contains('hidden')) {
     openPanel(phoneEl);
     loadShipments();
@@ -370,20 +462,22 @@ const raycaster = new THREE.Raycaster();
 function updateInteraction() {
   raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
   const targets = [screenMesh, ...[...doors.values()].map((d) => d.mesh), ...packages.values()];
-  const hit = raycaster.intersectObjects(targets, false)[0];
+  const hit = raycaster.intersectObjects(targets, true)[0];
   if (!hit) {
-    hintEl.textContent = '';
+    hintEl.textContent = focusMonitorMode ? 'F — вернуть свободную камеру' : '';
     currentInteractive = null;
     return;
   }
   const dist = hit.distance;
-  if (dist > 1.2) {
-    hintEl.textContent = '';
+  if (dist > 1.6) {
+    hintEl.textContent = focusMonitorMode ? 'F — вернуть свободную камеру' : '';
     currentInteractive = null;
     return;
   }
   currentInteractive = hit.object.userData.interactive;
-  if (currentInteractive?.type === 'screen') hintEl.textContent = 'E — взаимодействовать с терминалом';
+  if (currentInteractive?.type === 'screen') {
+    hintEl.textContent = focusMonitorMode ? 'E — терминал · F — вернуть свободную камеру' : 'E — терминал · F — фокус на монитор';
+  }
   if (currentInteractive?.type === 'door') {
     const d = doors.get(currentInteractive.cellId);
     hintEl.textContent = d && d.target < -0.1 ? 'E — закрыть дверцу' : 'E — взаимодействовать';
@@ -419,6 +513,16 @@ async function handleInteract() {
   }
 }
 
+function toggleMonitorFocus(force) {
+  const next = typeof force === 'boolean' ? force : !focusMonitorMode;
+  focusMonitorMode = next;
+  if (focusMonitorMode) {
+    camera.position.set(1.3, 1.48, -3.42);
+    yaw = Math.PI;
+    pitch = -0.04;
+  }
+}
+
 function ping(freq, duration) {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const o = ctx.createOscillator();
@@ -431,9 +535,59 @@ function ping(freq, duration) {
   o.stop(ctx.currentTime + duration);
 }
 
+function updateRemotePlayers(players) {
+  const known = new Set();
+  players.forEach((p) => {
+    if (p.userId === username) return;
+    known.add(p.userId);
+    let model = remotePlayers.get(p.userId);
+    if (!model) {
+      const group = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.14, 0.6, 4, 8),
+        new THREE.MeshStandardMaterial({ color: '#4a84ff', roughness: 0.65 })
+      );
+      body.position.y = 1.1;
+      group.add(body);
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 16, 16),
+        new THREE.MeshStandardMaterial({ color: '#f4dfc6', roughness: 0.9 })
+      );
+      head.position.y = 1.55;
+      group.add(head);
+      scene.add(group);
+      model = group;
+      remotePlayers.set(p.userId, model);
+    }
+    model.position.set(p.x, 0, p.z);
+    model.rotation.y = p.yaw;
+  });
+
+  for (const [id, model] of remotePlayers.entries()) {
+    if (!known.has(id)) {
+      scene.remove(model);
+      remotePlayers.delete(id);
+    }
+  }
+}
+
+let lastPresence = 0;
+async function sendPresence() {
+  if (!hasIdentity()) return;
+  const now = performance.now();
+  if (now - lastPresence < 250) return;
+  lastPresence = now;
+  fetch('/api/presence', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ userId: username, x: camera.position.x, z: camera.position.z, yaw, pitch })
+  }).catch(() => {});
+}
+
 const colliders = [
   new THREE.Box3(new THREE.Vector3(-7, -1, -7), new THREE.Vector3(7, 3, 7)),
-  new THREE.Box3(new THREE.Vector3(-0.85, 0, -4.8), new THREE.Vector3(0.85, 1.9, -4.2))
+  new THREE.Box3(new THREE.Vector3(-0.85, 0, -4.8), new THREE.Vector3(0.85, 1.9, -4.2)),
+  new THREE.Box3(new THREE.Vector3(1.01, 0, -4.84), new THREE.Vector3(1.59, 1.9, -4.18))
 ];
 
 function animate() {
@@ -442,10 +596,12 @@ function animate() {
 
   const speed = keys.ShiftLeft ? 0.08 : 0.045;
   const dir = new THREE.Vector3();
-  if (keys.KeyW) dir.z -= 1;
-  if (keys.KeyS) dir.z += 1;
-  if (keys.KeyA) dir.x -= 1;
-  if (keys.KeyD) dir.x += 1;
+  if (!focusMonitorMode) {
+    if (keys.KeyW) dir.z -= 1;
+    if (keys.KeyS) dir.z += 1;
+    if (keys.KeyA) dir.x -= 1;
+    if (keys.KeyD) dir.x += 1;
+  }
   dir.normalize();
   dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
 
@@ -457,7 +613,8 @@ function animate() {
   );
   const outside = !colliders[0].containsPoint(camera.position);
   const hitLocker = playerBox.intersectsBox(colliders[1]);
-  if (outside || hitLocker) camera.position.copy(prev);
+  const hitKiosk = playerBox.intersectsBox(colliders[2]);
+  if (outside || hitLocker || hitKiosk) camera.position.copy(prev);
 
   doors.forEach((d) => {
     d.angle += (d.target - d.angle) * 0.12;
@@ -471,6 +628,7 @@ function animate() {
     }
   });
 
+  sendPresence();
   updateInteraction();
   renderer.render(scene, camera);
 }
@@ -481,11 +639,43 @@ window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
+function hasIdentity() {
+  return Boolean(username && username.trim());
+}
+
+startGameBtnEl.onclick = async () => {
+  const name = usernameInputEl.value.trim().replace(/\s+/g, ' ');
+  if (!name) return;
+  username = name;
+  localStorage.setItem('username', username);
+  usernameModalEl.classList.add('hidden');
+  statusEl.textContent = `Онлайн: ${username}`;
+  await fetch('/api/user/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ userId: username, name: username })
+  });
+};
+
 (async function init() {
   await fetchCells();
   const qr = await fetch('/api/qr/current').then((r) => r.json());
   currentQr = qr;
   drawScreen();
-  statusEl.textContent = 'Онлайн: WS + API подключены';
+
+  if (hasIdentity()) {
+    usernameInputEl.value = username;
+    usernameModalEl.classList.add('hidden');
+    statusEl.textContent = `Онлайн: ${username}`;
+    await fetch('/api/user/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: username, name: username })
+    });
+  } else {
+    statusEl.textContent = 'Введите имя пользователя для старта';
+    usernameModalEl.classList.remove('hidden');
+  }
+
   animate();
 })();
