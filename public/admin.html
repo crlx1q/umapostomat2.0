@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Админка постомата</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body style="background:#f3f5fb; overflow:auto;">
+  <div class="admin-container">
+    <h1>Админ-панель постомата</h1>
+    <label>Пароль администратора</label>
+    <input id="adminPass" type="password" placeholder="ADMIN_PASSWORD" />
+    <button id="loginBtn">Войти</button>
+    <span id="testState" class="badge">Тестовый режим: нет</span>
+
+    <div class="admin-grid">
+      <section>
+        <h2>Создать посылку</h2>
+        <input id="title" placeholder="Название" />
+        <textarea id="desc" placeholder="Описание"></textarea>
+        <select id="size"><option>S</option><option>M</option><option>L</option></select>
+        <select id="userId"><option>player1</option><option>player2</option></select>
+        <select id="cellId"><option value="">Автоподбор ячейки</option></select>
+        <button id="createShipment">Создать</button>
+        <h3>Посылки</h3>
+        <table class="table" id="shipmentsTable"></table>
+      </section>
+
+      <section>
+        <h2>Ячейки</h2>
+        <table class="table" id="cellsTable"></table>
+
+        <h2>Диагностика</h2>
+        <button id="rgbStart">RGB test start</button>
+        <button id="rgbStop" class="secondary">RGB stop</button>
+        <button id="seqStart">Test open all sequentially</button>
+        <button id="seqStop" class="secondary">Stop test</button>
+      </section>
+    </div>
+  </div>
+  <script type="module" src="/admin.js"></script>
+</body>
+</html>
