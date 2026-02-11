@@ -88,3 +88,6 @@ document.getElementById('seqStart').onclick = () => api('/api/admin/test/open-se
 document.getElementById('seqStop').onclick = () => api('/api/admin/test/open-seq/stop', { method: 'POST' }).then(load);
 
 setInterval(load, 3000);
+
+
+document.getElementById('closeAllCells').onclick = () => api('/api/admin/cells/close-all', { method: 'POST' }).then(load);

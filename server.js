@@ -13,6 +13,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '0.0.0.0';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const LOCKER_ID = 'locker-main-001';
 
@@ -34,7 +35,8 @@ const state = {
   qr: null,
   screenMode: { mode: 'qr', color: null },
   tests: { rgb: false, openSeq: false, openSeqTimer: null, rgbTimer: null },
-  autoCloseTimers: new Map()
+  autoCloseTimers: new Map(),
+  players: new Map()
 };
 
 function buildCells() {
@@ -182,6 +184,44 @@ function shipmentPublic(shipment) {
   };
 }
 
+function usersPublic() {
+  return state.users.map((u) => ({ id: u.id, name: u.name }));
+}
+
+function playersPublic() {
+  return [...state.players.values()].filter((p) => Date.now() - p.ts < 8_000);
+}
+
+function broadcastPlayers() {
+  broadcast('playersUpdated', { players: playersPublic() });
+}
+
+app.post('/api/user/register', (req, res) => {
+  const { userId, name } = req.body || {};
+  if (!userId || typeof userId !== 'string') return res.status(400).json({ error: 'userId required' });
+  const normalizedId = userId.trim().slice(0, 24);
+  const displayName = (name || normalizedId).toString().trim().slice(0, 32);
+  const existing = state.users.find((u) => u.id === normalizedId);
+  if (!existing) state.users.push({ id: normalizedId, name: displayName });
+  else existing.name = displayName;
+  res.json({ ok: true, users: usersPublic() });
+});
+
+app.post('/api/presence', (req, res) => {
+  const { userId, x = 0, z = 0, yaw = 0, pitch = 0 } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  state.players.set(userId, {
+    userId,
+    x: Number(x) || 0,
+    z: Number(z) || 0,
+    yaw: Number(yaw) || 0,
+    pitch: Number(pitch) || 0,
+    ts: Date.now()
+  });
+  broadcastPlayers();
+  res.json({ ok: true });
+});
+
 app.get('/api/qr/current', (req, res) => {
   if (!state.qr) return res.status(503).json({ error: 'QR not ready' });
   res.json({ ...state.qr, ttlMs: Math.max(0, state.qr.expiresAt - Date.now()) });
@@ -256,6 +296,11 @@ app.post('/api/cells/:id/open', requireAdmin, (req, res) => {
   const result = openCell(req.params.id, { byAdmin: true });
   if (!result.ok) return res.status(404).json({ error: result.error });
   res.json(result.cell);
+});
+
+app.post('/api/admin/cells/close-all', requireAdmin, (req, res) => {
+  state.cells.forEach((cell) => closeCell(cell.id));
+  res.json({ ok: true, closed: state.cells.length });
 });
 
 app.post('/api/admin/login', (req, res) => {
@@ -367,14 +412,24 @@ wss.on('connection', (socket) => {
         qr: state.qr,
         cells: state.cells,
         screenMode: state.screenMode,
-        tests: { rgb: state.tests.rgb, openSeq: state.tests.openSeq }
+        tests: { rgb: state.tests.rgb, openSeq: state.tests.openSeq },
+        players: playersPublic(),
+        users: usersPublic()
       }
     })
   );
+  broadcastPlayers();
 });
 
 startQrLoop();
 
-server.listen(PORT, () => {
-  console.log(`Server started on http://localhost:${PORT}`);
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, p] of state.players.entries()) {
+    if (now - p.ts > 8_000) state.players.delete(id);
+  }
+}, 2_000);
+
+server.listen(PORT, HOST, () => {
+  console.log(`Server started on http://${HOST}:${PORT}`);
 });
