@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D симуляция постомата</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="hud">
+    <div id="crosshair">+</div>
+    <div id="hint"></div>
+    <div id="status">Подключение...</div>
+  </div>
+
+  <div id="terminal" class="panel hidden">
+    <h3>Терминал постомата</h3>
+    <p>Подключение к постомату через QR.</p>
+    <button id="scanBtn">Сканировать текущий QR</button>
+    <button id="closeTerminal">Закрыть (Esc)</button>
+  </div>
+
+  <div id="phone" class="panel hidden">
+    <h3>📱 Телефон игрока</h3>
+    <div id="sessionState">Подключение к постомату: не активно</div>
+    <div id="sessionTimer"></div>
+    <div id="shipments"></div>
+    <button id="closePhone">Закрыть</button>
+  </div>
+
+  <div id="help">
+    WASD — движение · мышь — обзор · Shift — бег · E — взаимодействие · Tab/M — телефон · Esc — выход
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
